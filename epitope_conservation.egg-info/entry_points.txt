@@ -1,0 +1,2 @@
+[console_scripts]
+epitope-conservation = epitope_conservation.cli:main

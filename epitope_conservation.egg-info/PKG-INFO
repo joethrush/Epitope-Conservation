@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: epitope-conservation
+Version: 0.1.0
+Summary: Rank conserved, accessible epitope candidates across protein structures
+Requires-Python: >=3.9
+Requires-Dist: biopython>=1.84
+Requires-Dist: numpy>=1.26
+Requires-Dist: scipy>=1.11

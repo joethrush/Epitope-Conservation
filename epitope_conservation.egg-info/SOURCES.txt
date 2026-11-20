@@ -1,0 +1,14 @@
+pyproject.toml
+epitope_conservation/__init__.py
+epitope_conservation/cli.py
+epitope_conservation/mapping.py
+epitope_conservation/pipeline.py
+epitope_conservation/scoring.py
+epitope_conservation/structure.py
+epitope_conservation.egg-info/PKG-INFO
+epitope_conservation.egg-info/SOURCES.txt
+epitope_conservation.egg-info/dependency_links.txt
+epitope_conservation.egg-info/entry_points.txt
+epitope_conservation.egg-info/requires.txt
+epitope_conservation.egg-info/top_level.txt
+tests/test_pipeline.py
