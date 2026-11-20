@@ -5,6 +5,7 @@ from .pipeline import run_pipeline
 
 
 def build_parser():
+    """Define the command-line arguments accepted by the analysis tool."""
     parser = argparse.ArgumentParser(
         prog="epitope-conservation",
         description="Rank conserved, accessible epitope candidates between two protein structures.",
@@ -27,6 +28,7 @@ def build_parser():
 
 
 def main(argv=None):
+    """Validate command-line input, run the analysis, and report user-facing errors."""
     args = build_parser().parse_args(argv)
     chains1 = [value.strip() for value in args.chains1.split(",") if value.strip()]
     chains2 = [value.strip() for value in args.chains2.split(",") if value.strip()]

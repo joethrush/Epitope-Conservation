@@ -14,6 +14,7 @@ GLYCAN_NAMES = {
 
 
 def load_structure(path: str):
+    """Parse a PDB or mmCIF file and return its Bio.PDB structure object."""
     path = str(path)
     if path.lower().endswith(".cif") or path.lower().endswith(".mmcif"):
         parser = MMCIFParser(QUIET=True)
@@ -23,6 +24,7 @@ def load_structure(path: str):
 
 
 def ca_coordinate(residue):
+    """Return the residue's selected C-alpha coordinates, or None if absent."""
     if "CA" not in residue:
         return None
     atom = highest_occupancy_altloc(residue["CA"])
@@ -30,12 +32,14 @@ def ca_coordinate(residue):
 
 
 def highest_occupancy_altloc(atom):
+    """Return the atom object used for coordinates without further altloc selection."""
     if atom.altloc in (" ", "A"):
         return atom
     return atom
 
 
 def clean_structure(structure):
+    """Remove unrecognized hetero residues and select occupied atom conformers."""
     for model in structure:
         for chain in list(model):
             for residue in list(chain):
@@ -60,17 +64,20 @@ def clean_structure(structure):
 
 
 def write_cleaned(structure, path: str):
+    """Write a Bio.PDB structure to a PDB file at the requested path."""
     io = PDBIO()
     io.set_structure(structure)
     io.save(path)
 
 
 def get_chain(structure, model_id: int, chain_id: str):
+    """Return a named chain from a model, or None when the chain is absent."""
     model = structure[model_id]
     return model[chain_id] if chain_id in model else None
 
 
 def assembly_metadata_available(path: str) -> bool:
+    """Check PDB or mmCIF metadata for biological assembly annotations."""
     path = str(path)
     if path.lower().endswith((".cif", ".mmcif")):
         try:

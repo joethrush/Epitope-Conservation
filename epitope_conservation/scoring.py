@@ -4,6 +4,7 @@ from scipy.optimize import least_squares
 
 
 def fit_rmsd(coords1, coords2):
+    """Return the Kabsch-aligned RMSD, or infinity if coordinate shapes differ."""
     c1 = np.asarray(coords1, dtype=float)
     c2 = np.asarray(coords2, dtype=float)
     if c1.shape != c2.shape or len(c1) == 0:

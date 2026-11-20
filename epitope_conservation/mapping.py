@@ -7,6 +7,7 @@ ResidueKey = Tuple[str, str]
 
 
 def residue_sequence(residue) -> str:
+    """Convert a structure residue name to its one-letter code, or X if unknown."""
     from Bio.SeqUtils import seq1
 
     try:
@@ -16,6 +17,7 @@ def residue_sequence(residue) -> str:
 
 
 def chain_sequence(chain) -> str:
+    """Return a chain's one-letter sequence, excluding non-protein residues."""
     out = []
     for residue in chain:
         if residue.id[0] == " ":
@@ -25,7 +27,11 @@ def chain_sequence(chain) -> str:
 
 def needleman_wunsch(seq1: str, seq2: str, gap: int = -2, mismatch: int = -1,
                      match: int = 2) -> Tuple[int, List[Tuple[int, Optional[int]]]]:
-    """Return a simple global alignment score and one representative."""
+    """Globally align two sequences and return the score and paired residue indices.
+
+    Dynamic programming fills a score table, then traces back one best alignment.
+    A gap is represented by ``None`` for the sequence without a paired residue.
+    """
     n, m = len(seq1), len(seq2)
     score = [[0] * (m + 1) for _ in range(n + 1)]
     trace = [[None] * (m + 1) for _ in range(n + 1)]
@@ -67,10 +73,12 @@ def needleman_wunsch(seq1: str, seq2: str, gap: int = -2, mismatch: int = -1,
 
 
 def protein_residues(chain) -> List:
+    """Return standard amino-acid residues, excluding hetero and water records."""
     return [r for r in chain if r.id[0] == " "]
 
 
 def align_chains(chain1, chain2) -> Tuple[float, Dict[int, int]]:
+    """Align two protein chains and return identity coverage and residue index pairs."""
     residues1 = protein_residues(chain1)
     residues2 = protein_residues(chain2)
     seq1 = "".join(residue_sequence(r) for r in residues1)
@@ -87,7 +95,11 @@ def align_chains(chain1, chain2) -> Tuple[float, Dict[int, int]]:
 
 def map_chains(chains1: Sequence, chains2: Sequence) -> Tuple[Dict[str, Dict[str, str]],
                                                                List[str]]:
-    """Map source chain IDs to target chain IDs, reporting ambiguous alternatives."""
+    """Choose the highest-identity chain pairing and report tied alternatives.
+
+    When both inputs have the same number of chains, all target-chain permutations
+    are scored; otherwise, chains are paired in their supplied order.
+    """
     if len(chains1) == len(chains2) and len(chains1) > 0:
         mappings = list(permutations(chains2))
     else:

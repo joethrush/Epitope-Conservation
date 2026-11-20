@@ -16,26 +16,33 @@ BACKBONE_ATOMS = ("N", "CA", "C", "O")
 
 @dataclass(frozen=True)
 class ResidueRef:
+    """Store a residue's chain, structure identifier, and three-letter name."""
+
     chain_id: str
     residue_id: tuple
     residue_name: str
 
     @property
     def label(self):
+        """Format the residue reference for reports and candidate labels."""
         return f"{self.chain_id}:{self.residue_name}{self.residue_id[1]}{self.residue_id[2].strip()}"
 
 
 @dataclass
 class Candidate:
+    """Represent an epitope patch by its residue labels and structure keys."""
+
     residues: List[ResidueRef]
     mapped_residue_keys: List[Tuple[str, tuple]]
 
 
 def residue_ref(residue):
+    """Convert a Bio.PDB residue into the compact reference used by the pipeline."""
     return ResidueRef(residue.parent.id, residue.id, residue.resname)
 
 
 def backbone_coords(residue):
+    """Return N, CA, C, and O coordinates, or None if any backbone atom is absent."""
     coords = []
     for name in BACKBONE_ATOMS:
         if name not in residue:
@@ -46,6 +53,7 @@ def backbone_coords(residue):
 
 
 def kabsch_rmsd(coords1, coords2):
+    """Superimpose two coordinate sets and return their root-mean-square deviation."""
     coords1 = np.asarray(coords1, dtype=float)
     coords2 = np.asarray(coords2, dtype=float)
     c1 = coords1.mean(axis=0)
@@ -62,6 +70,7 @@ def kabsch_rmsd(coords1, coords2):
 
 
 def residue_atoms(structure, selected_chain_ids):
+    """Collect protein atoms, glycan atoms, and their residues from chosen chains."""
     atoms = []
     glycans = []
     residues = []
@@ -81,7 +90,11 @@ def residue_atoms(structure, selected_chain_ids):
 
 
 def point_surface_accessibility(residue, all_atoms, probe_radius=1.4, n_points=96):
-    """Approximate relative solvent accessibility using a deterministic sphere."""
+    """Estimate residue exposure by sampling points around each heavy atom.
+
+    Points farther than the atom radius from every structure atom are counted as
+    exposed; the returned value is the exposed fraction of sampled points.
+    """
     ca = ca_coordinate(residue)
     if ca is None:
         return 0.0
@@ -109,6 +122,7 @@ def point_surface_accessibility(residue, all_atoms, probe_radius=1.4, n_points=9
 
 
 def residue_rsa(residue, all_atoms):
+    """Scale the estimated exposure to a relative accessibility score from 0 to 1."""
     # The compact 1.7-A probe proxy is scaled to a documented relative scale.
     accessibility = point_surface_accessibility(residue, all_atoms)
     max_accessibility = 0.60
@@ -117,6 +131,12 @@ def residue_rsa(residue, all_atoms):
 
 def make_candidates(model, target_chains: Sequence[str], chain_map: Optional[Dict[str, str]] = None,
                     size: int = 8, distance: float = 8.0):
+    """Build unique fixed-size residue patches around C-alpha neighbor groups.
+
+    Each protein residue with a C-alpha atom acts as a seed. Its closest eligible
+    residues within ``distance`` form a candidate, and duplicate patches are
+    removed before returning.
+    """
     chains = [model[c] for c in target_chains if c in model]
     residues = [r for chain in chains for r in protein_residues(chain)]
     ca_coords = {}
@@ -155,6 +175,7 @@ def make_candidates(model, target_chains: Sequence[str], chain_map: Optional[Dic
 
 
 def map_candidate(candidate, residue_map):
+    """Map every candidate residue to the other structure, failing if one is unmapped."""
     mapped = []
     for residue in candidate.residues:
         key = (residue.chain_id, residue.residue_id)
@@ -166,6 +187,7 @@ def map_candidate(candidate, residue_map):
 
 
 def build_residue_mappings(model1, model2, chains1, chains2):
+    """Map each available source chain to its best-aligned target chain and residues."""
     mapping = {}
     chain_pairs = {}
     for c1 in chains1:
@@ -193,6 +215,11 @@ def build_residue_mappings(model1, model2, chains1, chains2):
 
 def glycan_component(candidate_mapped_residues, model1, model2, all_glycans1, all_glycans2,
                      structure_ready=True):
+    """Return the candidate's fraction of backbone points clear of source glycans.
+
+    Return None when the structure is not ready or no candidate backbone
+    coordinates are available.
+    """
     if not structure_ready:
         return None
     coords1 = []
@@ -215,6 +242,7 @@ def glycan_component(candidate_mapped_residues, model1, model2, all_glycans1, al
 
 
 def patch_glycan_exposure(residues, glycans):
+    """Measure the fraction of patch backbone coordinates over 5 A from glycans."""
     coords = []
     for residue in residues:
         coords_value = backbone_coords(residue)
@@ -231,6 +259,7 @@ def patch_glycan_exposure(residues, glycans):
 
 
 def all_model_atoms(model):
+    """Split a model's non-hydrogen atoms into protein and recognized glycan atoms."""
     atoms = []
     glycans = []
     for chain in model:
@@ -243,6 +272,7 @@ def all_model_atoms(model):
 
 
 def sequons(chain):
+    """Find N-X-S/T glycosylation motifs and return their asparagine residues."""
     residues = protein_residues(chain)
     sequence = chain_sequence(chain)
     residue_map = {i: residue for i, residue in enumerate(residues)}
@@ -256,6 +286,7 @@ def sequons(chain):
 
 
 def modeled_glycans(model):
+    """Return references to recognized glycan residues already present in a model."""
     found = []
     for chain in model:
         for residue in chain:
@@ -267,6 +298,12 @@ def modeled_glycans(model):
 def run_pipeline(state1, state2, chains1, chains2, output_dir="epitope_output",
                  neighborhood_size=8, distance=8.0, rmsd_scale=4.0,
                  weights=(0.60, 0.20, 0.10, 0.10), force_as_is=False):
+    """Analyze two structures, rank matching epitope patches, and write reports.
+
+    The workflow validates assembly metadata, loads and cleans both structures,
+    aligns chains and candidate patches, calculates component scores, aggregates
+    results across model pairs, then writes CSV, text, and PyMOL output files.
+    """
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     warnings = []
@@ -295,6 +332,7 @@ def run_pipeline(state1, state2, chains1, chains2, output_dir="epitope_output",
     mapping_report = []
     all_candidate_keys = set()
 
+    # Compare every model pair so alternate models contribute to the final ranking.
     for model1 in structure1:
         if model1.id not in structure1:
             continue
@@ -311,6 +349,7 @@ def run_pipeline(state1, state2, chains1, chains2, output_dir="epitope_output",
             atoms1, glycans1 = all_model_atoms(model1)
             atoms2, glycans2 = all_model_atoms(model2)
 
+            # Keep only complete residue mappings with usable backbones and exposure.
             for candidate1 in candidates1:
                 mapped_keys = map_candidate(candidate1, mapping)
                 if mapped_keys is None or len(mapped_keys) != neighborhood_size:
@@ -373,6 +412,7 @@ def run_pipeline(state1, state2, chains1, chains2, output_dir="epitope_output",
                 glycan2 = patch_glycan_exposure(target_residues, glycans2)
                 glycan_score = None if glycan1 is None or glycan2 is None else min(glycan1, glycan2)
 
+                # Combine the measured features, renormalizing if glycan data is absent.
                 backbone_score = max(0.0, 1.0 - rmsd / rmsd_scale)
                 if glycan_score is None:
                     active_weights = (weights[0], weights[1], weights[2])
@@ -409,6 +449,7 @@ def run_pipeline(state1, state2, chains1, chains2, output_dir="epitope_output",
                     "model2": model2.id,
                 })
 
+    # Aggregate repeated observations of the same patch across model pairs.
     grouped = {}
     for result in results:
         grouped.setdefault(result["key"], []).append(result)
@@ -433,6 +474,7 @@ def run_pipeline(state1, state2, chains1, chains2, output_dir="epitope_output",
             "model_pairs": len(variants),
         })
 
+    # Rank by score first, then use structural fit and exposure to break ties.
     ranked.sort(key=lambda r: (
         -r["composite"],
         r["rmsd_median"],
@@ -441,6 +483,7 @@ def run_pipeline(state1, state2, chains1, chains2, output_dir="epitope_output",
     ))
     ranked = ranked[:100]
 
+    # Write ranked score details and per-state glycosylation information.
     csv_path = output / "ranked_candidates.csv"
     fieldnames = [
         "rank", "residue_ids", "chain_ids", "combined_score", "backbone_score",
@@ -486,11 +529,13 @@ def run_pipeline(state1, state2, chains1, chains2, output_dir="epitope_output",
                     writer.writerow([state_name, "modeled glycan", ref.chain_id,
                                      str(ref.residue_id[1]), ref.residue_name])
 
+    # Save the chain mapping summary separately for easier inspection.
     mapping_path = output / "mapping_report.txt"
     with open(mapping_path, "w", encoding="utf-8") as handle:
         handle.write("Chain mapping report\n")
         handle.write("\n".join(mapping_report) if mapping_report else "No ambiguities detected.")
 
+    # Generate a PyMOL script that highlights each ranked patch.
     pymol_path = output / "candidate_patches.pml"
     with open(pymol_path, "w", encoding="utf-8") as handle:
         handle.write("load state1_cleaned.pdb, state1\n")
